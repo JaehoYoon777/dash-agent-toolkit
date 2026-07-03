@@ -1,8 +1,13 @@
-# FAILURE_CATALOGUE.md — the 8 failure classes of LLM-built Dash apps
+# FAILURE_CATALOGUE.md — the 11 failure classes of LLM-built Dash apps
 
 Each entry: **Symptom → Mechanism → Detection → Fix pattern.**
 Detection commands are ripgrep/PowerShell/bash-agnostic where possible; adjust paths per repo.
 `dash-diagnose` runs all detections automatically; this file is the reference behind it.
+
+Classes 1–8 came from a deep audit of a production Dash app; classes 9–11 were
+discovered LIVE by running the `dash-ui-verify` harness against a lab copy of
+the same app — each one is a real bug that import-level smoke tests provably
+could not see (validation writeup: the lab repo's LESSONS.md).
 
 ---
 
@@ -64,6 +69,13 @@ rg -n "dash|plotly" pyproject.toml; rg -in "dash [0-9]" *.md
 1. Pin `==` to **installed reality** (upgrades become deliberate acts).
 2. Rewrite the agent docs' tech-stack section to the same versions, with version-specific warnings ("Dash 4: dcc.Dropdown renders `.dash-dropdown-content`/`.dash-options-list-option`, NOT `.Select-*`").
 3. Add a runtime gate to the repo's verify script: parse pyproject, compare `importlib.metadata.version()` per `==` pin, FAIL on mismatch. The gate runs in the post-edit hook, so drift can never be silent again.
+
+**Known Dash 4 landmines** (each independently rediscovered by multiple agents in a controlled fan-out — put this list verbatim in your agent docs):
+- `dcc.Slider(style=...)` → TypeError; the prop was removed. Wrap in `html.Div(style=...)`. (7 of 10 build agents hit this.)
+- `dcc.Dropdown` open menu = Radix popover (`.dash-dropdown-content`, options `.dash-options-list-option`, state via `aria-selected`/`data-highlighted`) — NOT react-select `.Select-*`.
+- `.dash-options-list-option` classes are SHARED by `dcc.Checklist` — a selector "for the dropdown" also matches checklists; scope by container (`:not(.dash-checklist)`).
+- Mount-triggered callbacks writing a URL via `allow_duplicate` don't chain to URL-reading callbacks (see class 4 / bootstrap anti-pattern).
+- Synthetic JS `el.click()` does NOT open Radix popovers — real pointer events (Playwright locator.click) required.
 
 ---
 
@@ -187,6 +199,61 @@ rg -n "legend2|legendgroup" --type py                  # is multi-legend used at
 
 ---
 
+## 9. Saved-state destruction — control sync + option normalization + auto-save
+
+**Symptom.** A saved view/config opens EMPTY or partially wiped — and the wipe is then persisted, destroying the saved state by the mere act of opening it. Related milder form: a setting saved via UI silently persists the OLD value when clicked fast.
+
+**Mechanism (three innocent parts, lethal chain).**
+1. Dash ≥4 `dcc.Dropdown` NORMALIZES a value missing from `options` to `None` at mount (e.g. the saved ticker was removed from the reference list, or was loaded data not present in the options source).
+2. A mount-firing "control → store" sync callback writes the normalized `None` back into the spec store (`r["ticker"] = value or ""`).
+3. Auto-save persists the wiped spec. No error anywhere.
+Sibling race: a Save callback reading `State` of a HIDDEN mirror control that is synced from visible controls by a SERVER callback — a fast click saves the stale mirror; the live-preview signal (body class flip) makes it look saved.
+
+**Detection.**
+```
+# mount-firing syncs writing user-editable stores:
+rg -n 'def _sync|Input\(\{"type"' --type py     # then check prevent_initial_call + "or ''" overwrites
+# option sources vs legal saved values: are options a superset of anything a saved spec may contain?
+# hidden mirrors: rg -n 'State\("<hidden-control>"' + a server callback syncing it from visible controls
+```
+
+**Fix pattern.** Break any link of the chain: (a) options must be a SUPERSET of every value that can legally appear in saved state (union reference list + loaded/lively values, cache-invalidated); (b) sync callbacks preserve, never overwrite, values a control reports as None at mount (`value or existing`); (c) auto-save skips pure-mount writes. For hidden mirrors: sync CLIENTSIDE (synchronous) and/or make the saver read the visible source controls as State. Tests must wait on the PERSISTENCE acknowledgment (saved-message), never on preview-driven signals.
+
+---
+
+## 10. Boot-frozen layout state (static `app.layout`)
+
+**Symptom.** A setting saved through the UI (theme, defaults) reverts on F5 / new tab, until server restart. Session navigation looks fine (stores mask it); full page loads expose it.
+
+**Mechanism.** `app.layout` assigned a static component tree built once in `build_app()`; any `dcc.Store(data=<loaded settings>)` inside captures BOOT-time state. Dash serves that frozen snapshot on every full page load.
+
+**Detection.**
+```
+rg -n "app.layout" --type py    # assignment of an OBJECT (not a function) + data=<loaded state> inside
+```
+
+**Fix pattern.** `app.layout = layout_fn` (a callable) — Dash re-evaluates per page load; re-read persisted state inside (keep it cheap: one small JSON read). Test: save a setting → `page.goto()` full reload → assert the setting's effect (body class/computed style) survived.
+
+---
+
+## 11. Metadata/store drift — the UI advertises data that doesn't exist
+
+**Symptom.** "Load data" fails with a raw store-internals error (`object 'X' doesn't exist`) for whole categories the pickers happily offer. Or: agents curate defaults from the metadata table and every one of them fails to load.
+
+**Mechanism.** Ticker/category metadata (xlsx/DB table) and the actual data store (HDF5/parquet/DB) evolve independently; nothing cross-checks. Every dropdown built from metadata offers unloadable entries; failures surface only at load-click, deep in store jargon.
+
+**Detection.**
+```python
+# cross-check metadata (level1, level2) pairs against actual store groups:
+meta_leaves = set(map(tuple, main_table[["level1","level2"]].drop_duplicates().values))
+store_leaves = {(g1, g2) for g1 in h5.keys() for g2 in h5[g1].keys()}
+print(meta_leaves - store_leaves)   # advertised-but-absent  -> the bug list
+```
+
+**Fix pattern.** Run the cross-check in the verify script; hide or badge unavailable leaves in pickers; translate load-boundary errors into "leaf X advertised by metadata but absent from store". Rule for agent context packs: curated defaults must be validated against the STORE, not the metadata.
+
+---
+
 ## Cross-cutting: which class is it?
 
 | You observe | Start with class |
@@ -199,3 +266,7 @@ rg -n "legend2|legendgroup" --type py                  # is multi-legend used at
 | Slow, laggy typing, long loads | 6 |
 | Same regression keeps returning despite documented rules | 7 |
 | Legend piles, axis drift, per-view figure code | 8 |
+| Saved views/settings wiped or reverting after open/save | 9 |
+| Settings revert on F5 but survive SPA navigation | 10 |
+| Pickers offer data that always fails to load | 11 |
+| "Missing data" for SOME tickers of a leaf after a restart | 6/11 lifecycle note: in-process caches die per restart; partial-column loaders make leaves half-present — check which loads ran THIS process before suspecting data |

@@ -5,6 +5,7 @@ Requires: pytest, playwright, pytest-playwright (`playwright install chromium`).
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shutil
@@ -16,6 +17,10 @@ import urllib.request
 from pathlib import Path
 
 import pytest
+
+# werkzeug logs one INFO line per Dash callback round-trip — hundreds per run,
+# drowning real failures. Silence before anything boots.
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 # --- CONFIG (adapt per repo) -------------------------------------------------
 REPO = Path(__file__).resolve().parents[2]          # tests/ui/ -> repo root
@@ -91,13 +96,37 @@ def app_server(tmp_path_factory) -> str:
     th.join(timeout=5)
 
 
-BENIGN = [r"favicon", r"Download the React DevTools", r"third-party cookie"]
+# VALIDATE this list against a clean boot of the actual app before trusting
+# the net — e.g. dash-ag-grid Enterprise without a license spams dozens of
+# console.error banner lines on every page containing a grid.
+BENIGN = [
+    r"favicon",
+    r"Download the React DevTools",
+    r"third-party cookie",
+    r"AG Grid Enterprise",
+    r"License Key Not Found",
+    r"ag-grid\.com",
+    r"\*{10,}",
+]
+
+
+# Overriding pytest-playwright's `page` fixture DISABLES its --screenshot
+# machinery — a custom fixture must self-capture. The makereport hookwrapper
+# attaches per-phase reports so teardown can see whether the test failed.
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
 
 
 @pytest.fixture()
-def page(app_server, browser):
+def page(app_server, browser, request):
     """Page with the universal regression net: any console error, pageerror,
-    or HTTP 5xx (Dash callback exception) fails the test in teardown."""
+    or HTTP 5xx (Dash callback exception) fails the test in teardown.
+
+    NOTE: pytest-playwright WIPES the --output artifacts dir at session start;
+    within-run screenshots belong there, cross-run visual records don't."""
     ctx = browser.new_context(viewport={"width": 1600, "height": 1000})
     pg = ctx.new_page()
     errs: list[str] = []
@@ -105,10 +134,23 @@ def page(app_server, browser):
     pg.on("pageerror", lambda e: errs.append(f"pageerror: {e}"))
     pg.on("response", lambda r: errs.append(f"HTTP {r.status} {r.url}") if r.status >= 500 else None)
     yield pg
+
+    failed = getattr(request.node, "rep_call", None) is not None and request.node.rep_call.failed
+    if failed:
+        shot = ARTIFACTS / f"fail_{request.node.name}.png"
+        try:
+            pg.screenshot(path=str(shot), full_page=True)
+            print(f"\n[screenshot] {shot}")
+        except Exception:
+            pass
+
     real = [e for e in errs if not any(re.search(b, e) for b in BENIGN)]
     if real:
-        shot = ARTIFACTS / "console_fail.png"
-        pg.screenshot(path=str(shot), full_page=True)
+        shot = ARTIFACTS / f"console_{request.node.name}.png"
+        try:
+            pg.screenshot(path=str(shot), full_page=True)
+        except Exception:
+            pass
         ctx.close()
         pytest.fail(f"Browser errors (screenshot: {shot}):\n" + "\n".join(real[:15]))
     ctx.close()

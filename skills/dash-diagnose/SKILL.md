@@ -82,6 +82,17 @@ rg -n "legend2|legendgroup" --type py
 ```
 Count hand-rolled figure builders per dashboard vs shared factories. Legend suppression + HTML-chip workarounds = the 30-legend pile class.
 
+### Audit 9 — Saved-state destruction chain (catalogue #9)
+```bash
+rg -n "app.layout" --type py           # static object + data=<loaded state> inside = boot-frozen (catalogue #10)
+rg -n 'or ""' --type py                # sync callbacks overwriting with normalized None
+rg -n "prevent_initial_call" --type py # which control->store syncs fire on mount?
+```
+For every dropdown whose value can come from SAVED state: is the options source a superset of every legal saved value? For every Save callback: does it read `State` of a hidden mirror synced by a SERVER callback (race)? Is there a persistence acknowledgment distinct from preview signals?
+
+### Audit 10 — Metadata/store drift (catalogue #11)
+Cross-check the ticker/category metadata table's (group, subgroup) pairs against the actual data store's groups (HDF5 `h5py.File(...).keys()`, DB schema, parquet dirs). Report advertised-but-absent leaves — every one is a picker offering data that can never load, and a trap for curated defaults in agent context packs.
+
 ## Writing DIAGNOSIS.md
 
 One section per applicable class (numbered as in FAILURE_CATALOGUE), each with: symptom as the owner experiences it → mechanism → this repo's evidence (file:line, counts) → severity. Lead with a 5-line executive summary naming the top 3 causes. State explicitly which classes did NOT apply.

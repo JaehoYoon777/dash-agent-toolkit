@@ -4,6 +4,8 @@ Skills + playbook for building and maintaining **highly interactive Plotly Dash 
 
 Distilled from a deep multi-agent audit of a real production Dash app (a quant research portal) that exhibited every one of those failure modes. The root causes turned out to be structural and generic — they will exist in any LLM-built Dash app of nontrivial size. This toolkit packages the diagnosis procedure, the verification harness, and the review checklist so they can be applied to **any** Dash repo.
 
+**Field-validated (2026-07):** the toolkit was dogfooded on a lab copy of the source app — the harness went up in ~2 hours and immediately caught three real production bugs invisible to import-level tests (a saved-view wipe chain, a save race, boot-frozen settings → catalogue classes 9–10), then a 10-agent fan-out built 10 interactive dashboards (10/10 shipped) using the PLAYBOOK §11 recipe, surfacing catalogue class 11 and the Dash-4 landmine list along the way.
+
 ## What's inside
 
 ```

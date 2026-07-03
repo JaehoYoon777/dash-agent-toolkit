@@ -71,6 +71,21 @@ Check by scenario: edit each touched field → navigate away → back → still 
 For each edited file: which OTHER views/pages import it or share its Stores/pattern-matching ID types? A fix verified on one surface can cross-fire on another (`{"type": ...}` IDs shared across features fire each other's callbacks).
 Check: grep the edited symbols and ID types across the repo; name every surface that needs a look.
 
+## P12 — Option-list superset + mount-sync preservation (saved-state destruction)
+
+Any dropdown whose value can come from SAVED state: Dash ≥4 normalizes a value missing from `options` to `None` at mount; a mount-firing sync callback writing `value or ""` back into the spec store then WIPES the saved row, and auto-save persists the wipe.
+Check: (a) is the options source a superset of every value legally present in saved specs (reference list ∪ loaded/live values)? (b) do control→store syncs preserve existing values when the control reports None (`value or existing`, never `value or ""`)? (c) does auto-save fire on pure mounts?
+
+## P13 — Persistence signal ≠ preview signal
+
+A UI confirmation driven by a live-preview path (body class flip on radio check, optimistic store update) is NOT proof of persistence. Saves that read `State` of a hidden mirror control synced by a SERVER callback lose a fast-click race — persist the stale mirror while the preview looks right.
+Check: mirror syncs are clientside (synchronous) or the saver reads the visible source controls; any test/verification waits on the explicit save acknowledgment ("Saved." message) before navigating.
+
+## P14 — Boot-frozen layout state
+
+`app.layout` assigned a static object freezes every `dcc.Store(data=<loaded state>)` at boot — saved settings revert on F5/new tab until server restart (SPA navigation masks it).
+Check: `rg -n "app.layout"` — if it's not a callable and any Store inside carries loaded persisted state, flag it. Verify with save → full reload → effect survives.
+
 ## Output format
 
 ```

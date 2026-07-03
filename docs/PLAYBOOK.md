@@ -78,6 +78,20 @@ One `plotting/factories.py` owns figure assembly (multi-axis lines, subplot grid
 - For UI bugs, give the reproduction path, not the diagnosis ("click X, then Y — the graph keeps the old range"), and let the harness confirm the fix.
 - When a fix "doesn't take", the model's mental model is wrong — more `!important`/more observers/more guards is never the answer. Demand the agent verify its selectors/assumptions against the live DOM (`dash-gotchas-review` P7/P8).
 
-## 11. When to consider leaving Dash
+## 11. Fanning out builders (validated recipe)
+
+Ten Sonnet-class agents each shipped a working ~400-LOC interactive dashboard module in one pass (10/10) when given this context pack — and reliability collapses when parts are missing:
+
+1. **One exemplar file** to imitate (the best existing module — contract, load pattern, palette handling).
+2. **The blessed factory** they must use (no hand-rolled grids).
+3. **A hard contract**: exactly one new file; unique ID prefix; don't-touch list; registry wired centrally by the orchestrator, never by agents.
+4. **A version-specific landmine list** (e.g. "Dash 4: Slider has no style prop; wrap in html.Div"). Without it, 7 of 10 agents burned a debug loop on the same removed prop.
+5. **Store-validated data samples** — curated tickers/IDs verified against the actual data store, not the metadata table (see catalogue #11).
+6. **A mandatory self-run smoke command** with seeded synthetic data; "do not report success with a failing smoke".
+7. **Structured friction harvest**: require `errors_encountered` (symptom→cause→fix) and `api_gaps` in every agent's report. Convergent complaints across agents are your genuine API/docs backlog — six of ten independently flagged the same cache-API ambiguity; that's a roadmap item, not noise.
+
+Windows agent environments additionally need: `encoding="utf-8"` on every `open()`, `PYTHONIOENCODING=utf-8` in shells (cp949 consoles), and scratch `.py` files instead of PowerShell here-string inline scripts.
+
+## 12. When to consider leaving Dash
 
 Honest note: Dash is workable with this toolkit, but it fights LLMs more than a typical React/TypeScript stack does (less training data for its callback model, version-sensitive DOM internals, server round-trip interactivity). If the app's scope keeps growing — real-time interactions, complex client state — a rewrite conversation (FastAPI + React, or dash→dmc-native throughout) is legitimate. Run `dash-diagnose`, land Phases 0–2 (git, versions, eyes), and *then* decide with data: if the CSS war and callback sprawl keep generating regressions after the harness is in place, the structural ceiling — not the agent — is the problem.
