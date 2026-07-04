@@ -86,6 +86,14 @@ Check: mirror syncs are clientside (synchronous) or the saver reads the visible 
 `app.layout` assigned a static object freezes every `dcc.Store(data=<loaded state>)` at boot — saved settings revert on F5/new tab until server restart (SPA navigation masks it).
 Check: `rg -n "app.layout"` — if it's not a callable and any Store inside carries loaded persisted state, flag it. Verify with save → full reload → effect survives.
 
+## P15 — Popup lists: visible height must scale with content
+
+Component libraries ship compact popup defaults (Dash's dropdown popover: inline `max-height` ≈ a handful of rows, plus an inline FIXED height on the inner virtualized scroller). Fine for short lists; a UX defect on long ones — the user scrolls a tiny window through hundreds of options.
+The generic principle: **let content drive height under a generous, viewport-aware cap.** Don't hardcode a row count. Mechanics that make it adaptive by construction:
+- Raise the popup's `max-height` cap (`min(calc(100vh - <margin>), <comfortable-cap>)`); content-driven height keeps short lists compact automatically.
+- Virtualized scrollers often carry an inline FIXED height — and are typically mounted ONLY for long lists, so overriding that class targets exactly the menus that need it. CSS `!important` beats non-important inline styles.
+Check: open the app's longest option list AND a short one — long shows substantially more rows under the cap, short stays content-sized; after a deep scroll the virtualized list still renders items (no blank gap — proves the windowing survived the height override).
+
 ## Output format
 
 ```
