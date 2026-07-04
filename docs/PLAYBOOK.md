@@ -85,10 +85,12 @@ Ten Sonnet-class agents each shipped a working ~400-LOC interactive dashboard mo
 1. **One exemplar file** to imitate (the best existing module — contract, load pattern, palette handling).
 2. **The blessed factory** they must use (no hand-rolled grids).
 3. **A hard contract**: exactly one new file; unique ID prefix; don't-touch list; registry wired centrally by the orchestrator, never by agents.
-4. **A version-specific landmine list** (e.g. "Dash 4: Slider has no style prop; wrap in html.Div"). Without it, 7 of 10 agents burned a debug loop on the same removed prop.
+4. **A version-specific landmine list** (e.g. "Dash 4: Slider has no style prop; wrap in html.Div"). Without it, 7 of 10 agents burned a debug loop on the same removed prop; a second fan-out (4 agents, deeper modules) WITH the list hit zero traps.
 5. **Store-validated data samples** — curated tickers/IDs verified against the actual data store, not the metadata table (see catalogue #11).
 6. **A mandatory self-run smoke command** with seeded synthetic data; "do not report success with a failing smoke".
-7. **Structured friction harvest**: require `errors_encountered` (symptom→cause→fix) and `api_gaps` in every agent's report. Convergent complaints across agents are your genuine API/docs backlog — six of ten independently flagged the same cache-API ambiguity; that's a roadmap item, not noise.
+7. **Structured friction harvest**: require `errors_encountered` (symptom→cause→fix) and `api_gaps` in every agent's report. Convergent complaints across agents are your genuine API/docs backlog — six of ten independently flagged the same cache-API ambiguity; that's a roadmap item, not noise. Agents also catch the ORCHESTRATOR's blind spots ("my module is unreachable until X is wired").
+8. **Copy, don't describe, subtle contracts**: for invariants like save/auto-save guard chains, instruct "copy the exemplar's function structure EXACTLY and adapt fields" — imitation of verified code transfers subtle guards reliably; prose specifications of the same rules don't.
+9. **Grep for hardcoded dispatch outside the registry before adding plugins** (`rg 'fw_id ==|framework =='`). A plugin registry coexisting with a hardcoded if/elif dispatch somewhere else means every new plugin dead-clicks with zero error — the modules were fine, the integration point was the bug.
 
 Windows agent environments additionally need: `encoding="utf-8"` on every `open()`, `PYTHONIOENCODING=utf-8` in shells (cp949 consoles), and scratch `.py` files instead of PowerShell here-string inline scripts.
 
