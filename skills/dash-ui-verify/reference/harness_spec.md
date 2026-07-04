@@ -111,6 +111,7 @@ Plus the rule: "any visual claim requires producing and LOOKING at a screenshot 
 
 ## Pitfalls
 
+- **Backend detection (Dash ≥4.2):** the "Freedom Update" (2026-06) decoupled Dash from Flask — apps may run FastAPI or Quart. The `werkzeug.serving.make_server(app.server, ...)` boot fixture assumes Flask/WSGI. Detect before assuming: `type(app.server).__module__` — `flask.*` → werkzeug boot as spec'd; `fastapi.*`/ASGI → boot with a `uvicorn.Server` in a thread (`server.should_exit = True` for clean teardown); `quart.*` → `hypercorn` equivalent. A harness written for Flask silently failing on an ASGI Dash app is version-drift class 3 wearing a new coat.
 - Env var before app imports (config constants are copied at import).
 - Playwright browsers live in `%LOCALAPPDATA%/ms-playwright` — fine; never set `PLAYWRIGHT_BROWSERS_PATH` into a synced repo.
 - Sandbox via pytest `tmp_path_factory` (system temp — outside cloud sync).

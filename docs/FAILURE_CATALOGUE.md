@@ -76,6 +76,7 @@ rg -n "dash|plotly" pyproject.toml; rg -in "dash [0-9]" *.md
 - `.dash-options-list-option` classes are SHARED by `dcc.Checklist` — a selector "for the dropdown" also matches checklists; scope by container (`:not(.dash-checklist)`).
 - Mount-triggered callbacks writing a URL via `allow_duplicate` don't chain to URL-reading callbacks (see class 4 / bootstrap anti-pattern).
 - Synthetic JS `el.click()` does NOT open Radix popovers — real pointer events (Playwright locator.click) required.
+- **Minor-version churn continues** (verify per installed x.y, not just major): 4.1 (2026-03) added `dcc.Dropdown` `debounce` prop, searchable-when-focused, large-option-list performance work — hand-rolled debounce/perf workarounds may now fight native ones. 4.2 "Freedom Update" (2026-06) decoupled Dash from Flask: `app.server` may be FastAPI/Quart (ASGI) — anything assuming Flask/werkzeug (test harness boot, WSGI middleware, `@server.route` health endpoints) breaks. The Dash 4 DCC redesign also restyled core components (new `dcc.Button`, WCAG 2.2 AA defaults) — re-inspect rendered DOM per minor upgrade before trusting selectors.
 
 ---
 

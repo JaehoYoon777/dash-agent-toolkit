@@ -23,6 +23,7 @@ for p in ('dash','plotly','dash-mantine-components','dash-ag-grid','dash-bootstr
     except Exception: pass"
 ```
 Compare against: pyproject/requirements pins AND version claims in CLAUDE.md/AGENTS.md/README. Flag every mismatch in either direction. Severity: high if major-version drift (Dash 2 vs 3/4 changes DOM internals + callback chaining semantics).
+Also record the SERVER BACKEND on Dash ≥4.2 (Flask-decoupled): `python -c "import dash; app=dash.Dash(); print(type(app.server).__module__)"` — Flask vs FastAPI/Quart determines how test harnesses boot the app and whether WSGI-assuming code breaks.
 
 ### Audit 2 — Module + callback census
 ```bash
