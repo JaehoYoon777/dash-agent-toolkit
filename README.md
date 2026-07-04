@@ -23,6 +23,10 @@ dash-agent-toolkit/
       templates/                   <- conftest.py, helpers.py, test templates, snap.py, Stop hook
     dash-gotchas-review/
       SKILL.md                     <- pre-ship review checklist for any Dash UI change
+    notebook-to-dash/
+      SKILL.md                     <- notebook -> Dash conversion with a numeric parity gate
+      reference/mpl_plotly_map.md  <- matplotlib/seaborn -> Plotly mapping + number-changing traps
+      templates/                   <- goldens extractor + parity test template
 ```
 
 ## Install (work PC or anywhere)
@@ -42,6 +46,7 @@ dash-agent-toolkit/
 1. **`dash-diagnose`** — run first. Audits the repo (version drift, callback/store census, uirevision keying, CSS-war metrics, verification gap, git health, perf hot paths) and writes `DIAGNOSIS.md` + a sequenced `ROADMAP.md` **into the target repo**, with every fix item as a copy-paste-ready one-session prompt.
 2. **`dash-ui-verify`** — the highest-leverage fix. Stands up a Playwright smoke suite so agents *see* broken UI (screenshots, console errors, computed styles, rendered viewports) instead of guessing. Usually Phase 1 of the generated roadmap.
 3. **`dash-gotchas-review`** — run before shipping any UI change, forever. Makes the classic Dash/CSS failure patterns an executable checklist instead of tribal knowledge.
+4. **`notebook-to-dash`** — whenever porting a Jupyter analysis into the app. Harvests golden outputs from the notebook, transplants (not transcribes) the compute, and blocks UI work behind a numeric parity test — plus an instruction-fidelity ledger so explicit asks can't silently vanish into "discretion".
 
 Read `docs/PLAYBOOK.md` once yourself — it is the 10-minute version of everything the skills enforce.
 
