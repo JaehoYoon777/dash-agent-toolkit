@@ -118,3 +118,13 @@ Plus the rule: "any visual claim requires producing and LOOKING at a screenshot 
 - `pyproject`: `[tool.pytest.ini_options] markers=["smoke"]`, `addopts="--screenshot only-on-failure --output tests/ui/artifacts"`.
 - Gitignore `tests/ui/artifacts/` and the dirty-flag file.
 - If the app factory regenerates asset files at boot (palette CSS etc.), that's normal app behavior — harmless in tests.
+
+## Synthetic fixture data: mirror the store PHYSICALLY
+
+When the app reads a binary store (HDF5/parquet), build the test fixture in the SAME physical layout (same group tree, same dataset names/dtypes/shape conventions, seeded rng) and point the app at it via the data-path env override. Then the data layer runs its REAL code path in tests - zero test-only branches, and a schema change breaks the fixture builder loudly instead of silently diverging. Validated greenfield: a 7-leaf synthetic HDF5 mirroring a 204-leaf production store let the whole suite run with no app-side test hooks at all.
+
+## Component-library interaction notes (Playwright)
+
+- **dcc.Graph mounts async** after a callback returns: the container appears first, `.js-plotly-plot` seconds later. Count plots with a POLLING assertion (`expect(locator).to_have_count(n, timeout=...)`), never with an immediate `.count()` after the container shows. This race cost the only failure in an otherwise-green first boot.
+- **Mantine (dmc) SegmentedControl/Radio**: the `<input type=radio>` is visually hidden (outside viewport) - `get_by_label(...).click()` fails. Click the rendered `.mantine-SegmentedControl-label` (enumerate real sub-elements, not the semantic input).
+- **Mantine Select/MultiSelect options** portal to `<body>` (Combobox) - locate by `role="option"`, not by CSS under the input. Unlike Radix (which ignores synthetic events entirely), Mantine options DO respond to JS `.click()`, but MultiSelect re-renders its list after each pick - interact one option at a time with waits, or use real Playwright clicks.

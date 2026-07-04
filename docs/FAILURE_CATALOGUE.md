@@ -255,6 +255,18 @@ print(meta_leaves - store_leaves)   # advertised-but-absent  -> the bug list
 
 ---
 
+## 12. Dead-series windows — wall-clock-anchored ranges empty the panel
+
+**Symptom.** A panel (or whole figure) renders empty/None for SHORT range selections but fine on "Max" — or the reverse: a spread/basis panel is blank while its leg panels draw. No error anywhere.
+
+**Mechanism.** Range dropdowns implemented as `start = today - offset` assume every series extends to today. Discontinued series (Libor swaps end 2023-06-30 at cessation; delisted tickers; stale leaves last refreshed months ago) have zero overlap with a today-anchored 1Y window. Derived series inherit the earliest death among their legs. Found live: a SOFR-vs-Libor basis panel that was silently empty at every range except Max.
+
+**Detection.** For each plotted series: `s.index.max()` vs wall clock; any gap larger than the shortest range option will blank that range. Grep for `Timestamp.today()`, `datetime.now()`, `pd.Timestamp("now")` inside window/range helpers.
+
+**Fix pattern.** Anchor trailing windows on the DATA's own last observation, per panel: `end = s.index.max(); s.loc[s.index >= end - offset]`. Put the helper in the shared compute layer — in one 10-agent fan-out, 5 agents hand-rolled this mapping and only one anchored it correctly by luck.
+
+---
+
 ## Cross-cutting: which class is it?
 
 | You observe | Start with class |
@@ -270,4 +282,5 @@ print(meta_leaves - store_leaves)   # advertised-but-absent  -> the bug list
 | Saved views/settings wiped or reverting after open/save | 9 |
 | Settings revert on F5 but survive SPA navigation | 10 |
 | Pickers offer data that always fails to load | 11 |
+| Panel empty at short ranges, fine at Max (or vice versa) | 12 |
 | "Missing data" for SOME tickers of a leaf after a restart | 6/11 lifecycle note: in-process caches die per restart; partial-column loaders make leaves half-present — check which loads ran THIS process before suspecting data |

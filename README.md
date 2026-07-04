@@ -48,6 +48,8 @@ dash-agent-toolkit/
 3. **`dash-gotchas-review`** — run before shipping any UI change, forever. Makes the classic Dash/CSS failure patterns an executable checklist instead of tribal knowledge.
 4. **`notebook-to-dash`** — whenever porting a Jupyter analysis into the app. Harvests golden outputs from the notebook, transplants (not transcribes) the compute, and blocks UI work behind a numeric parity test — plus an instruction-fidelity ledger so explicit asks can't silently vanish into "discretion".
 
+**Starting from scratch instead of rescuing?** Skip diagnosis and build the app *born immune*: `docs/PLAYBOOK.md` §13 is the validated greenfield checklist (version-truth pins, env-sandboxable data/state paths, store-derived catalogs, single color source + native theming, layout-as-function, pure compute layer, blessed factories, same-day harness). A five-page portal built off that list went 9/9 green on its browser suite the same day it was started.
+
 Read `docs/PLAYBOOK.md` once yourself — it is the 10-minute version of everything the skills enforce.
 
 ## Requirements

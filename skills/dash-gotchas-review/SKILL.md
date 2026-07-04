@@ -92,6 +92,7 @@ Component libraries ship compact popup defaults (Dash's dropdown popover: inline
 The generic principle: **let content drive height under a generous, viewport-aware cap.** Don't hardcode a row count. Mechanics that make it adaptive by construction:
 - Raise the popup's `max-height` cap (`min(calc(100vh - <margin>), <comfortable-cap>)`); content-driven height keeps short lists compact automatically.
 - Virtualized scrollers often carry an inline FIXED height — and are typically mounted ONLY for long lists, so overriding that class targets exactly the menus that need it. CSS `!important` beats non-important inline styles.
+- Library-native prop beats CSS when it exists: dmc Select/MultiSelect take `maxDropdownHeight` directly (viewport-relative values like `"55vh"` work) — zero override CSS, content-driven below the cap.
 Check: open the app's longest option list AND a short one — long shows substantially more rows under the cap, short stays content-sized; after a deep scroll the virtualized list still renders items (no blank gap — proves the windowing survived the height override).
 
 ## Output format

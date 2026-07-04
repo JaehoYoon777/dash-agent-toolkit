@@ -94,6 +94,25 @@ Ten Sonnet-class agents each shipped a working ~400-LOC interactive dashboard mo
 
 Windows agent environments additionally need: `encoding="utf-8"` on every `open()`, `PYTHONIOENCODING=utf-8` in shells (cp949 consoles), and scratch `.py` files instead of PowerShell here-string inline scripts.
 
+10. **Forbid re-delegation, in bold, in the pack.** A third fan-out (10 background builder agents with sub-agent-spawning ability) had ALL TEN immediately delegate the build to a sub-agent of their own and stop with "waiting for the background agent" — trigger phrase was the pack's "you are one agent in a fan-out" framing. The orphaned grandchildren then raced their corrected parents for the same file, and agents received cross-agent abort messages they (correctly) refused as unverifiable. The fix that worked: a bold first-paragraph rule — "YOU do the work yourself, with your own tools, synchronously. NEVER spawn another agent, NEVER wait for a background agent — there is no other agent." Orchestrator side: treat any builder reply of the form "the build agent is running, I'll wait" as a FAILURE and immediately resume that agent with the correction; audit final file state centrally regardless, since two writers may have touched it.
+11. **Expect duplicated-writer convergence, not corruption.** When a parent and its orphan child both built the same module from the same pack, both produced spec-compliant files and the survivor passed the strengthened smoke — packs with exemplar + contract + smoke make double-builds converge. The audit is still mandatory: the parent must re-verify the on-disk state it did not fully write (line-by-line vs spec + its own smoke run).
+
 ## 12. When to consider leaving Dash
 
 Honest note: Dash is workable with this toolkit, but it fights LLMs more than a typical React/TypeScript stack does (less training data for its callback model, version-sensitive DOM internals, server round-trip interactivity). If the app's scope keeps growing — real-time interactions, complex client state — a rewrite conversation (FastAPI + React, or dash→dmc-native throughout) is legitimate. Run `dash-diagnose`, land Phases 0–2 (git, versions, eyes), and *then* decide with data: if the CSS war and callback sprawl keep generating regressions after the harness is in place, the structural ceiling — not the agent — is the problem.
+
+## 13. Greenfield: build it un-diagnosable (validated day-one checklist)
+
+The catalogue describes diseases; a new app can be born immune to all of them. A full portal (5 pages, data layer over a 200-leaf HDF5, light/dark theming, persisted watchlist/settings, Playwright harness) built with this checklist went 9/9 green on its browser suite the same day, with exactly two test-side fixes and zero app-side debugging:
+
+- **git init before the first module; version-truth table (installed reality) in AGENTS.md + pyproject in the same commit** (kills catalogue #3).
+- **Env-overridable data path AND state dir from the first line of config** (`APP_DB`, `APP_STATE_DIR`) — the harness sandbox is a design input, not a retrofit (kills the harness's only production-edit).
+- **Pickers fed from the STORE's own catalog** (walk the actual HDF5/DB), never from a metadata sheet — advertised-but-absent leaves become structurally impossible (kills #11).
+- **One color source** (a tokens module); component library themes natively (dmc `MantineProvider forceColorScheme`); Plotly gets an EXPLICIT template (paper/plot/font/grid) derived from the same tokens. No CSS file carries color → the override war can never start (kills #5). Runtime theme toggles need those explicit template colors — default-template figures won't follow.
+- **`app.layout` is a function from day one** (kills #10).
+- **One writer per Store, enforced at design time** — merge "N buttons feed one control" into one callback with `ctx.triggered_id` instead of N `allow_duplicate` writers (kills #7's sprawl).
+- **Pure compute module; callbacks contain zero compute expressions** — every number on a page is testable without a browser (imports the notebook-to-dash iron rule into app code).
+- **Blessed factories before the second page exists**, including the ones fan-out agents converge on asking for: multi-line, ranked bar, heatmap, sparkline, empty-note placeholder — all setting `uirevision`, window-keyed `revision` param (kills #2, #8).
+- **Range/window helper in the compute layer** ("1Y/3Y/MAX" → clipped frame, anchored on the DATA's last date, not wall clock — see catalogue #12) — in one fan-out, 5 of 10 agents independently hand-rolled this mapping.
+- **Harness lands the same day**: synthetic fixture data mirroring the real store's PHYSICAL layout (same group/dataset schema) so the data layer needs zero test-only branches; sandboxed state dir; console-error/pageerror/5xx net autouse on every test; smoke marker tier wired to hooks.
+- **Pattern-matching callbacks that write state guard the all-None mount firing** (`PreventUpdate`) at first writing (kills #9).
