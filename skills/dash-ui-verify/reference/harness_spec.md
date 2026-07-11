@@ -98,6 +98,7 @@ Contrast heuristic: one `page.evaluate` of ~35 lines — for each visible text e
 
 - **Do NOT run browser tests per-edit** (a multi-edit turn would launch Chromium N times). PostToolUse hook (if one runs an import-smoke script) additionally touches a `.ui_dirty` flag when the edited path is UI-critical.
 - **Stop hook** (`stop_ui_smoke.py`, timeout ~150s): on stop, if `stop_hook_active` → exit 0 (loop guard); if no `.ui_dirty` → exit 0; else delete flag, run the smoke tier, exit 2 with the last ~40 lines on stderr if red — the agent must fix before finishing the turn.
+- **One Stop gate per repo.** If `dash-install-guardrails` is (or will be) installed, do NOT also install `stop_ui_smoke.py` — add the smoke tier to the guardrails gate's `SMOKE_CMD` instead (its `stop_smoke_gate.py` is the superset: transcript fallback + fail-closed toolchain checks). Two Stop hooks with separate dirty flags run the browser tier twice per turn.
 - Budget: smoke tier shares one session-scoped app boot (~4s) + one Chromium (~2s) → target 25–40s total.
 
 ## Canonical commands (mirror into AGENTS.md + .cursor/rules + CLAUDE.md)

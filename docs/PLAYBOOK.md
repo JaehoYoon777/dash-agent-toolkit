@@ -76,7 +76,7 @@ One `plotting/factories.py` owns figure assembly (multi-axis lines, subplot grid
 - Fresh agent session at every natural seam (feature → bug → new feature). Stale context biases more than it helps.
 - Paste tracebacks and DOM dumps verbatim; never summarize them.
 - For UI bugs, give the reproduction path, not the diagnosis ("click X, then Y — the graph keeps the old range"), and let the harness confirm the fix.
-- When a fix "doesn't take", the model's mental model is wrong — more `!important`/more observers/more guards is never the answer. Demand the agent verify its selectors/assumptions against the live DOM (`dash-gotchas-review` P7/P8).
+- When a fix "doesn't take", the model's mental model is wrong — more `!important`/more observers/more guards is never the answer. Demand the agent verify its selectors/assumptions against the live DOM (`dash-gotchas-review` P1/P2).
 
 ## 11. Fanning out builders (validated recipe)
 
@@ -128,3 +128,13 @@ The catalogue describes diseases; a new app can be born immune to all of them. A
 - **Range/window helper in the compute layer** ("1Y/3Y/MAX" → clipped frame, anchored on the DATA's last date, not wall clock — see catalogue #12) — in one fan-out, 5 of 10 agents independently hand-rolled this mapping.
 - **Harness lands the same day**: synthetic fixture data mirroring the real store's PHYSICAL layout (same group/dataset schema) so the data layer needs zero test-only branches; sandboxed state dir; console-error/pageerror/5xx net autouse on every test; smoke marker tier wired to hooks.
 - **Pattern-matching callbacks that write state guard the all-None mount firing** (`PreventUpdate`) at first writing (kills #9).
+
+## 14. Deployment + enforcement model
+
+A toolkit that lives only in its own repo is invisible: an audited app shipped five browser-class regressions while the verify harness sat uninstalled one directory away. Deployment and enforcement are part of the methodology, not an afterthought.
+
+- **Skills install at user level, per machine.** Run `install.ps1` once per machine (copies the skills into `~/.claude/skills/`); re-run it after every toolkit pull -- installed copies do not track the repo. Browser binaries and venvs never sync between machines either; reinstall those per machine too (see `dash-ui-verify`).
+- **The enforcement stack is `dash-install-guardrails`, applied per app repo:** hooks (post-edit smoke + a Stop gate; match Bash-mediated writes as well as Edit/Write, or the gate has a silent bypass), executable invariants in the verify script (installed-vs-pinned version gate, store-writer manifest counted from `app.callback_map`, rendered-layout key walk), a build stamp (footer hash so a stale server is self-evident -- catalogue #16), and a sandboxed, env-overridable state dir so verification can never mutate production state. `dash-ui-verify`'s smoke tier runs on top of these checks.
+- **Escalation rule of thumb.** Said once: put it in the prompt. Said twice: write it in the repo docs (GOTCHAS/AGENTS). Said three times: machine-enforce it via guardrails -- a hook, a verify check, or a ratchet test. A rule you keep repeating is an enforcement gap, not a communication problem.
+- **PROMPTING templates never repeat a rule a hook already enforces.** If a template still says "run the smoke test before reporting done", the hook is missing, not the sentence. Prompt text is for judgment and context; the machine handles compliance (section 4: rules the machine enforces survive; rules the model must remember don't).
+

@@ -1,0 +1,28 @@
+{
+  "_comment": "merge the 'hooks' block into <repo>/.claude/settings.json - JSON has no comments, so delete this _comment key after merging. Copy post_edit_verify.py and stop_smoke_gate.py to <repo>/.claude/hooks/ first and adapt their CONFIG blocks. 'py -3' is the Windows launcher; swap for an absolute interpreter (e.g. C:/Users/me/anaconda3/envs/app311/python.exe) if py is not on PATH. Hook 'timeout' (seconds) must exceed the subprocess TIMEOUT_S inside each script (60s verify, 90s smoke). The PostToolUse matcher MUST include Bash - editor-only matchers miss shell writes.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3 .claude/hooks/post_edit_verify.py",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3 .claude/hooks/stop_smoke_gate.py",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

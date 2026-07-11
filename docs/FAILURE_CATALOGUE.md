@@ -1,4 +1,4 @@
-# FAILURE_CATALOGUE.md — the 11 failure classes of LLM-built Dash apps
+# FAILURE_CATALOGUE.md -- the 16 failure classes of LLM-built Dash apps
 
 Each entry: **Symptom → Mechanism → Detection → Fix pattern.**
 Detection commands are ripgrep/PowerShell/bash-agnostic where possible; adjust paths per repo.
@@ -8,6 +8,8 @@ Classes 1–8 came from a deep audit of a production Dash app; classes 9–11 we
 discovered LIVE by running the `dash-ui-verify` harness against a lab copy of
 the same app — each one is a real bug that import-level smoke tests provably
 could not see (validation writeup: the lab repo's LESSONS.md).
+Classes 13-16 came from a multi-agent workflow audit of the same app after
+real use -- defects that shipped repeatedly despite green import-level smoke tests.
 
 ---
 
@@ -267,6 +269,87 @@ print(meta_leaves - store_leaves)   # advertised-but-absent  -> the bug list
 
 ---
 
+## 13. Mount-echo persistence -- opening a saved view rewrites its file
+
+**Symptom.** Saved views/configs change on disk with ZERO user edits: colors null out, numeric fields snap to dropdown steps, names get backfilled, file mtimes churn on every open. Sibling of class 9, but needs no missing option -- the mere act of opening is the write.
+
+**Mechanism (three innocent parts, lethal chain).**
+1. **The insert loophole.** `prevent_initial_call=True` does NOT suppress a pattern-matching callback whose Inputs are INSERTED by another callback's render -- unless its Output is inserted in the same render. A rebuild-all children callback (spec store -> row cards) re-inserts the inputs on every render, so the control->store sync re-fires on every spec write AND on the initial mount of a saved view.
+2. **The sync is lossy.** It reconstructs the store from rendered control values, normalizing on the way: `value or ""`, a hex color missing from the named list -> None, line width snapped to the nearest dropdown step, display name backfilled from the ticker (e.g. a row editor whose color/width/name round-trip through dcc controls).
+3. **Auto-save persists the echo.** The store is an Input of the save chain; the first post-mount sync always differs from the saved spec (step 2), so opening the view writes the mutated spec to disk. No error anywhere; smoke tests that call render() never see it -- the damage happens in the post-mount callback storm.
+
+Variant: a control sync mutates the SPEC to enforce a display rule the render path already applies (e.g. normalize-on -> force every row to one axis). With auto-save, trying the feature once permanently destroys the saved layout. Display coercions belong in the render path ONLY.
+
+**Detection.**
+```
+# pattern-input syncs whose Output lives OUTSIDE the rebuilt children:
+rg -n 'Input\(\{"type"' --type py
+# lossy normalization inside them:
+rg -n 'or ""|or 0|else None' --type py
+# runtime proof: open a saved view, touch nothing, navigate away -- byte-compare the file
+```
+
+**Fix pattern.** No-op guard in the sync: diff the reconstructed fields against `State` of the store and `PreventUpdate` when nothing changed (this also breaks the class-15 cascade). Write only the triggered row's keys (`ctx.triggered_id`). Never normalize-then-persist: accept raw values; treat None as "not rendered yet", not "user cleared". Ratchet test: the state-file byte-compare open/close test (see `dash-ui-verify`).
+
+---
+
+## 14. Payload bloat -- the slowness that gets blamed on plotting
+
+**Symptom.** Typing lags; every control change takes ~1s; the app degrades linearly with row/option count; profiling the figure code finds nothing. DevTools shows multi-MB `_dash-update-component` responses.
+
+**Mechanism (stacking).**
+- **Embedded per-row option lists.** Every dynamically rendered card embeds the same full options list (e.g. ~3000 tickers x 11 row editors = ~33k option dicts, multi-MB JSON per response). Caching the Python list does nothing -- the WIRE payload is re-serialized on every response.
+- **Rebuild-all children.** One callback `Output(container, "children") <- Input(store)` rebuilds ALL cards on ANY store write -- every keystroke-scale edit re-ships and remounts everything (destroying focus/open state as a bonus).
+- **Closed-panel serialization.** Callbacks build payloads for panels that default closed -- e.g. a data grid's full `.to_dict("records")` of every displayed series' history, shipped on every edit and never looked at.
+
+**Detection.**
+```
+rg -n "options=" --type py                          # full list embedded in a repeated card?
+rg -n 'Output\("[^"]*", "children"\)' --type py     # container rebuilds keyed on a whole store
+rg -n 'to_dict\("records"\)' --type py              # grids built regardless of panel state
+# runtime: harness request log -- response sizes during ONE edit
+```
+
+**Fix pattern.** Options cross the wire once per page: a `search_value` callback returning a filtered top-N slice, or `options=[]` plus a clientside assign from one shared Store/asset. Patch only the changed card (MATCH-scoped outputs / `Patch()`); never rebuild the whole container from the store. Gate expensive panel payloads on the panel actually being open (`State` of the ui-state store, `no_update` otherwise). Add a payload-size budget assert to the harness so regressions fail loudly.
+
+---
+
+## 15. Callback echo cascade -- one edit, seven round-trips
+
+**Symptom.** One control edit produces a visible cascade: spinners flicker, the UI "ticks" a second later, the server log shows the same callbacks firing 2-3x per interaction, figures rebuild twice, disk writes double.
+
+**Mechanism.**
+- **Multi-writer RMW stores.** N `allow_duplicate=True` writers each do `State(store)` -> mutate -> return the WHOLE dict. Overlapping fires lose updates: last writer wins with a stale base and silently reverts the other edit.
+- **The echo.** A store write fans out to rebuild-all children + figure rebuild + auto-save; the rebuilt children RE-INSERT the pattern inputs, which re-fire the sync (class 13's insert loophole), which writes the store AGAIN -- and the first pass always differs (lossy normalization), so the ENTIRE fan-out runs a second time, including a second figure rebuild and a second disk write. The chain stops only when dcc.Store equality finally makes a write a no-op: 5-7 sequential round-trips per edit (debounced date presets prepend more hops).
+
+**Detection.**
+```
+rg -n "allow_duplicate=True" --type py | wc -l      # 40+ repo-wide is a symptom in itself
+rg -c 'Output\("<store-id>"' --type py              # writers per hot store; >=4 -> redesign
+# runtime: count POST /_dash-update-component per single edit in the harness log; >2 = cascade
+```
+
+**Fix pattern.** One reducer per store: every mutation trigger an Input of ONE callback dispatching on `ctx.triggered_id` -- zero `allow_duplicate`, no lost updates. No-op guards wherever a sync reconstructs state (`PreventUpdate` on equality). Debounce the save behind a timer store. Drop `allow_duplicate=True` from any output the census shows has one writer -- the flag pre-emptively disables the duplicate-output validation that would catch the next accidental writer. Ratchet: the interaction-latency budget test locks the round-trip count (see `dash-ui-verify`).
+
+---
+
+## 16. Stale-server debugging -- turns burned on code that never ran
+
+**Symptom.** Owner reports "nothing changed" after a shipped fix; the agent re-implements a feature it already shipped; screenshots later prove the browser was running 3-turn-old code. Whole sessions spent "fixing" correct files.
+
+**Mechanism.** The dev server runs with `debug=False` (no hot reload), so edits never reach the running process until a manual kill+restart -- and nothing in the UI identifies WHICH code is serving, so neither the human nor the agent can tell a stale process from a failed fix. The agent piles changes onto an already-correct file; the owner re-issues already-implemented requests; both burn turns debugging code that never ran.
+
+**Detection.**
+```
+rg -n "debug=" run.py app.py *.bat                  # hot reload off? launcher passes no --debug?
+rg -in "build|stamp|version" <layout footer module> # any serving-code identifier at all?
+```
+
+**Fix pattern.** Two halves. (1) **Build stamp**: a footer element rendering a short hash (git SHA or source-tree hash) computed at process start -- staleness becomes self-evident to both parties. (2) **Restart-and-assert**: after any UI edit, kill the port, relaunch, GET the route, and assert the NEW stamp (and any new component IDs) appear in the served HTML before reporting done -- wire it into the verify flow (`dash-install-guardrails`). The `dash-ui-verify` harness boots the app in-process, so TESTS never see a stale server; the owner's browser does -- the stamp is for the human loop.
+
+---
+
+
 ## Cross-cutting: which class is it?
 
 | You observe | Start with class |
@@ -283,4 +366,8 @@ print(meta_leaves - store_leaves)   # advertised-but-absent  -> the bug list
 | Settings revert on F5 but survive SPA navigation | 10 |
 | Pickers offer data that always fails to load | 11 |
 | Panel empty at short ranges, fine at Max (or vice versa) | 12 |
+| Saved file's content/mtime churns on mere open; colors/widths/names mutate without edits | 13 (sibling of 9) |
+| Multi-MB callback responses; slowness that profiling the figure code can't find | 14 (then 6) |
+| One edit fires the same callbacks 2-3x; double rebuilds and double writes | 15 |
+| "Nothing changed" after a shipped fix; agent re-ships already-shipped features | 16 |
 | "Missing data" for SOME tickers of a leaf after a restart | 6/11 lifecycle note: in-process caches die per restart; partial-column loaders make leaves half-present — check which loads ran THIS process before suspecting data |

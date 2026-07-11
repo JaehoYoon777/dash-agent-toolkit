@@ -16,6 +16,8 @@ Two modes. Check which applies before doing anything:
    ```
    <repo-python> -m pytest tests/ui -m smoke -q
    ```
+   Budget asserts: latency/payload tests fail loudly on perf regressions -- treat red budgets like red functional tests.
+
 2. **Full tier** before closing a session that touched CSS/palettes/portals, or on request:
    ```
    <repo-python> -m pytest tests/ui -q
@@ -48,6 +50,14 @@ Install (once per machine; binaries do not sync between machines — that's a fe
 <repo-python> -m pip install pytest playwright pytest-playwright
 <repo-python> -m playwright install chromium
 ```
+
+## Regression ratchet
+
+Every bug a HUMAN reports (not one the agent caught itself) becomes a failing Playwright test BEFORE the fix lands. Write the test, watch it fail for the incident's reason, then fix; the test goes green and stays forever. Name it for the incident (`test_open_view_rewrites_file`, `test_route_change_blank_page`) so the suite reads as the app's failure history. Never delete a ratchet test: after a few weeks the smoke tier converges on the surfaces that actually break -- coverage allocated by evidence, not guesswork. `dash-install-guardrails` wires the suite into the post-edit/Stop hooks so it cannot be skipped.
+
+Canonical ratchet tests (steal these):
+- **State-file byte-compare (open/close)**: hash the saved view/settings file, open it in the browser, navigate away WITHOUT editing, assert the file is byte-identical. Catches the whole mount-echo class (failure catalogue #13) -- mount-firing syncs + lossy normalization + auto-save rewriting files on mere open.
+- **Interaction-latency budget**: perform one row edit; assert wall-clock under a budget AND count `POST /_dash-update-component` requests in the harness request log (e.g. <=2 per edit). Catches echo cascades (#15) and payload bloat (#14) before the user feels them.
 
 ## Non-negotiables
 

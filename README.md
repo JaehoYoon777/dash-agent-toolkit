@@ -11,9 +11,11 @@ Distilled from a deep multi-agent audit of a real production Dash app (a quant r
 ```
 dash-agent-toolkit/
   README.md                        <- you are here
+  install.ps1                      <- user-level installer (Windows): skills/* -> ~/.claude/skills
+  install.sh                       <- same for bash (rsync -a --delete; cp -r fallback)
   docs/
     PLAYBOOK.md                    <- human-side methodology: how to run agents on a Dash app
-    FAILURE_CATALOGUE.md           <- the 8 failure classes: symptom -> mechanism -> detection -> fix
+    FAILURE_CATALOGUE.md           <- the 16 failure classes: symptom -> mechanism -> detection -> fix
   skills/
     dash-diagnose/
       SKILL.md                     <- audits a Dash repo, writes DIAGNOSIS.md + ROADMAP.md into it
@@ -27,26 +29,41 @@ dash-agent-toolkit/
       SKILL.md                     <- notebook -> Dash conversion with a numeric parity gate
       reference/mpl_plotly_map.md  <- matplotlib/seaborn -> Plotly mapping + number-changing traps
       templates/                   <- goldens extractor + parity test template
+    dash-fix/
+      SKILL.md                     <- symptom-dispatched fix loop for any Dash bug; browser proof before done
+      reference/                   <- six playbooks: visual, stale, callbacks, perf, routing, persistence
+    dash-install-guardrails/
+      SKILL.md                     <- wires the enforcement layer (verify checks + hooks) into a target repo
+      templates/                   <- PostToolUse + Stop hook scripts, invariant checks, settings.json fragment
 ```
 
-## Install (work PC or anywhere)
+## Install (user-level)
 
-1. Clone this repo.
-2. Copy the three skill folders into the **target repo**:
-   ```
-   <target-repo>/.claude/skills/dash-diagnose/
-   <target-repo>/.claude/skills/dash-ui-verify/
-   <target-repo>/.claude/skills/dash-gotchas-review/
-   ```
-   (Or into `~/.claude/skills/` to make them available in every project.)
-3. Claude Code picks them up automatically. For **Cursor** and **Codex**, the skills' outputs (canonical verify commands, invariants) get mirrored into `AGENTS.md` and `.cursor/rules/` — the `dash-diagnose` roadmap includes a step that creates those mirrors.
+Clone once per machine, run the installer, done -- every skill becomes available in every repo Claude Code opens.
+
+```
+git clone <this-repo-url> dash-agent-toolkit
+cd dash-agent-toolkit
+.\install.ps1     # Windows (PowerShell 5.1+; supports -WhatIf)
+./install.sh      # macOS / Linux / Git Bash
+```
+
+Each `skills/*` directory is mirrored to `~/.claude/skills/<name>` (robocopy `/MIR` on Windows, `rsync -a --delete` elsewhere), so renames and deletions propagate and the installed set always matches the repo exactly. Idempotent: re-run after every `git pull` to pick up updates. Claude Code auto-discovers user-level skills; no per-repo setup needed.
+
+## Install (per-repo alternative)
+
+Prefer the user-level installer above. To pin skills to one repo instead (versioned with the code), copy any `skills/*` folder into `<target-repo>/.claude/skills/<name>/`. Claude Code picks both locations up automatically. For **Cursor** and **Codex**, the skills' outputs (canonical verify commands, invariants) get mirrored into `AGENTS.md` and `.cursor/rules/` — the `dash-diagnose` roadmap includes a step that creates those mirrors.
 
 ## Order of operations on a new (or ailing) Dash repo
 
 1. **`dash-diagnose`** — run first. Audits the repo (version drift, callback/store census, uirevision keying, CSS-war metrics, verification gap, git health, perf hot paths) and writes `DIAGNOSIS.md` + a sequenced `ROADMAP.md` **into the target repo**, with every fix item as a copy-paste-ready one-session prompt.
 2. **`dash-ui-verify`** — the highest-leverage fix. Stands up a Playwright smoke suite so agents *see* broken UI (screenshots, console errors, computed styles, rendered viewports) instead of guessing. Usually Phase 1 of the generated roadmap.
 3. **`dash-gotchas-review`** — run before shipping any UI change, forever. Makes the classic Dash/CSS failure patterns an executable checklist instead of tribal knowledge.
-4. **`notebook-to-dash`** — whenever porting a Jupyter analysis into the app. Harvests golden outputs from the notebook, transplants (not transcribes) the compute, and blocks UI work behind a numeric parity test — plus an instruction-fidelity ledger so explicit asks can't silently vanish into "discretion".
+4. **`dash-install-guardrails`** — after the harness exists: converts the rules into machine gates (PostToolUse + Stop hooks covering Bash writes and JS assets, version gate, store-writer manifest, layout walk, state sandbox, build stamp). From here on, skipped smoke tests block the turn instead of shipping.
+5. **`dash-fix`** — the day-to-day entry point once the above are in place: any single bug ("broken", "slow", "blank page", "nothing changed") dispatches to a symptom playbook, with ground-truth checks first and browser proof + a regression test required before done.
+6. **`notebook-to-dash`** — whenever porting a Jupyter analysis into the app. Harvests golden outputs from the notebook, transplants (not transcribes) the compute, and blocks UI work behind a numeric parity test — plus an instruction-fidelity ledger so explicit asks can't silently vanish into "discretion".
+
+**Why an enforcement layer at all:** prose rules drift. A checklist in CLAUDE.md gets skipped exactly when it matters most -- long sessions, big diffs, an agent that never re-read the doc. What survives is what the machine executes: invariants converted into verify-script checks, and hooks that run them after every edit (PLAYBOOK section 4). `dash-install-guardrails` installs that layer into a target repo; from then on "the app still works" is a command's exit code, not an agent's recollection.
 
 **Starting from scratch instead of rescuing?** Skip diagnosis and build the app *born immune*: `docs/PLAYBOOK.md` §13 is the validated greenfield checklist (version-truth pins, env-sandboxable data/state paths, store-derived catalogs, single color source + native theming, layout-as-function, pure compute layer, blessed factories, same-day harness). A five-page portal built off that list went 9/9 green on its browser suite the same day it was started.
 

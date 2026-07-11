@@ -1,6 +1,6 @@
 ---
 name: dash-gotchas-review
-description: Pre-ship review checklist for Plotly Dash UI changes — catches the recurring failure patterns (portal coverage gaps, asymmetric sub-element styling, stale DOM assumptions, uirevision scope bugs, store-writer sprawl, mount-bootstrap anti-patterns, version drift) before they reach the user. Use when reviewing any Dash change touching layout, callbacks, CSS, clientside JS, theming, or Plotly figures; when a UI fix "didn't take"; or before reporting done on any Dash UI work.
+description: Pre-ship review checklist for Plotly Dash UI changes -- catches the recurring failure patterns (portal coverage gaps, asymmetric sub-element styling, stale DOM assumptions, uirevision scope bugs, store-writer sprawl, mount-bootstrap anti-patterns, mount-time store writes that rewrite saved files on open, per-instance payload bloat, unkeyed-Graph remounts that reset zoom, version drift) before they reach the user. Use when reviewing any Dash change touching layout, callbacks, CSS, clientside JS, theming, or Plotly figures (for mid-fix debugging of a fix that "didn't take", use dash-fix); when opening a view modifies its saved file or state changes with zero user edits; when every click feels slow or callback responses run to megabytes; when zoom or legend state resets at random; or before reporting done on any Dash UI work.
 ---
 
 # dash-gotchas-review
@@ -94,6 +94,24 @@ The generic principle: **let content drive height under a generous, viewport-awa
 - Virtualized scrollers often carry an inline FIXED height — and are typically mounted ONLY for long lists, so overriding that class targets exactly the menus that need it. CSS `!important` beats non-important inline styles.
 - Library-native prop beats CSS when it exists: dmc Select/MultiSelect take `maxDropdownHeight` directly (viewport-relative values like `"55vh"` work) — zero override CSS, content-driven below the cap.
 Check: open the app's longest option list AND a short one — long shows substantially more rows under the cap, short stays content-sized; after a deep scroll the virtualized list still renders items (no blank gap — proves the windowing survived the height override).
+
+## P16 -- Insert-loophole mount writes
+
+Pattern-matching callbacks re-fire whenever their Inputs are RE-INSERTED by a container rebuild (a callback returning fresh cards into `children`). `prevent_initial_call=True` does NOT suppress this unless the callback's outputs are inserted alongside its inputs -- an output living outside the container (a page-level store) re-fires on every render, including plain view open. If that callback writes normalized values back into the store (`value or ""`, snapped line widths, colors wiped to None) and an auto-save chain reads the store, merely OPENING a saved surface rewrites its file (e.g. a row-cells sync persisting lossy normalization on view mount).
+Check: every store-writing sync callback whose inputs live inside rebuilt children diffs its reconstructed payload against `State` of the store and raises `PreventUpdate` when nothing changed -- a no-op guard, not a prevent_initial_call flag. Verify with the dash-ui-verify harness: open the surface with ZERO edits; assert zero disk writes / byte-identical state file.
+
+## P17 -- Payload budget
+
+Serialization is the usual "slow app", not plotting. Three payload sins:
+- Big option lists embedded per component instance: grep `options=<fn>()` inside per-row/card builders. N instances x thousands of options re-serialize on every container rebuild (e.g. a ~3000-ticker dropdown per row = multi-MB per control tweak; a Python-side cache does not help -- the WIRE payload is rebuilt). Serve via a `search_value` callback or one shared clientside source.
+- Serializing content for closed-by-default panels (grid rowData, hidden figures) on every change: gate on the panel's open state, return `no_update` while closed.
+- Container-children rebuild-all driven by a store Input (`Output(..., "children") <- Input(store, "data")`): needs a written justification for why MATCH-scoped per-item outputs or `Patch()` don't apply; rebuild-all also remounts every child (feeds P16 and P18).
+Check: Network tab (or a temporary after_request size logger), one interaction of each hot type; content-length per response under a STATED budget -- name the number in the finding (e.g. <100 KB per control tweak).
+
+## P18 -- Unkeyed Graph remount
+
+A `dcc.Graph` delivered inside rebuilt `children` without a stable `id`, sitting after conditional siblings (failure banner, warning div), changes React position whenever a sibling appears or disappears -- React remounts the Graph and silently discards uirevision state (zoom/legend "randomly" reset). Unkeyed delivery also blocks `Patch()` adoption, so every tweak re-ships the whole figure.
+Check: hot figures render as a persistent `dcc.Graph(id=...)` declared once in the static layout, updated via `Output(id, "figure")` -- never a fresh Graph inside `children`; conditional content lives in a separate sibling Div. Verify: zoom in, then toggle EVERY conditional sibling (force the banner, empty state, etc.) -- zoom survives each toggle.
 
 ## Output format
 
