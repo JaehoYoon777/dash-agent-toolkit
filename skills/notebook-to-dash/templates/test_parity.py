@@ -68,6 +68,31 @@ def test_figure_series_match(data):
     assert np.isclose(float(np.min(y)), -0.3389, atol=1e-4)  # golden min drawdown
 
 
+# -- notebook self-asserts, re-run against the PORT (strongest goldens) --------
+def test_notebook_asserts_hold_on_port(data):
+    # If the notebook contains assert cells (planted ground truth, identity
+    # checks, recovery tests), reproduce them here CALLING THE PORTED MODULE —
+    # exact, semantic, immune to display rounding. Rank these above anything
+    # parsed from printed output.
+    # e.g. golden from cell 30's assert:
+    #   m = npc.find_top_matches(data.tail(60), data, top_k=3)
+    #   assert sorted(m["end_pos"]) == [559, 1259, 1959]
+    ...
+
+
+# -- moving inputs: gate runs on a frozen snapshot, live path checks SCHEMA ----
+def test_live_loader_schema(data):
+    # `data` fixture = the FROZEN snapshot (as-of date in filename) the goldens
+    # were harvested against. The app's LIVE loader can't value-match it — check
+    # schema instead: columns, dtypes, index properties, and that the live frame
+    # extends (not truncates) the snapshot's range.
+    live = ...  # app_data_layer.load_for_page(as_of=None)
+    assert list(live.columns) == list(data.columns)
+    assert (live.dtypes == data.dtypes).all()
+    assert live.index.is_monotonic_increasing and not live.index.has_duplicates
+    assert live.index.max() >= data.index.max()
+
+
 # -- alignment / dtype guards (classic silent-drift sources) -------------------
 def test_index_alignment(data):
     got = ...  # npc.joined_frame(data)

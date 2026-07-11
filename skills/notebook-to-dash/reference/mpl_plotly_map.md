@@ -2,6 +2,19 @@
 
 Constructs first, then the silent-behavior traps that shift numbers or drop data during translation.
 
+## Principle: translate INTENT, not spines
+
+When a construct has no faithful Plotly twin (stacked secondary axes, FuncFormatter
+tick relabeling, exotic locators), reproduce what the READER EXTRACTS from it in
+Plotly's native idiom — usually hover. A stacked date-ruler answering "what calendar
+date is offset +20 on series #3" becomes `customdata` per trace + a `hovertemplate`;
+a third y-axis mapping the shared curve onto another instrument's price scale
+becomes hover fields or a toggle, not three spines. Such substitutions are
+presentation-boundary changes: allowed, but each gets a ledger entry naming what was
+dropped and what replaced it. Replicating spines pixel-for-pixel where Plotly fights
+you produces a worse page than translating the intent — and hides the substitution
+the ledger exists to surface.
+
 ## Construct map
 
 | Notebook construct | Plotly equivalent | Notes |
@@ -12,6 +25,12 @@ Constructs first, then the silent-behavior traps that shift numbers or drop data
 | `ax.bar` / stacked | `go.Bar` + `barmode="stack"\|"group"\|"overlay"` | mpl stacks via bottom=; plotly via barmode |
 | `ax.fill_between` | two `go.Scatter` traces + `fill="tonexty"` | order matters: lower trace first |
 | `ax.axhline/axvline` | `fig.add_hline/add_vline` | |
+| `ax.axhspan/axvspan` (shaded bands) | `fig.add_hrect/add_vrect` | layer="below" to keep traces on top |
+| `ax.secondary_yaxis(pos, functions=(f, inv))` — incl. STACKS of them | `layout.yaxisN` with `overlaying="y", side="right"`, `position=`, `anchor="free"` — Plotly axes take no transform functions: precompute `tickvals` (in primary units) + `ticktext` (f(tickvals)) per ruler | >2 rulers: prefer intent translation (hover fields per scale) — see principle |
+| `ax.secondary_xaxis` + `FuncFormatter` (tick relabeling, e.g. offsets→dates) | preferred: `customdata` + `hovertemplate` per trace; literal: `layout.xaxis2` with precomputed `tickvals/ticktext` | formatter logic must move into precomputed arrays — ledger the choice |
+| `ax.annotate` / `ax.text` | `fig.add_annotation` | `arrowprops` → `showarrow=True` + `ax/ay` |
+| `plt.suptitle` vs `ax.set_title` | `layout.title` vs `subplot_titles=` in make_subplots | distinct slots; don't merge them |
+| line families faded by alpha (spaghetti/ensemble plots) | per-trace `opacity=` or rgba color | `legendgroup` + `showlegend` on one trace, else the legend explodes |
 | `ax.set_yscale("log")` | `yaxis_type="log"` | log axes change perceived story — never drop |
 | `plt.imshow` / `sns.heatmap` | `go.Heatmap` | mpl y-origin is TOP for imshow; plotly heatmap y ascends — `yaxis autorange="reversed"` to match |
 | `sns.heatmap(annot=True)` | `go.Heatmap(text=..., texttemplate="%{text}")` | |
