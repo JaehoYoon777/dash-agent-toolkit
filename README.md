@@ -16,6 +16,7 @@ dash-agent-toolkit/
   docs/
     PLAYBOOK.md                    <- human-side methodology: how to run agents on a Dash app
     FAILURE_CATALOGUE.md           <- the 16 failure classes: symptom -> mechanism -> detection -> fix
+    PROMPTS.md                     <- copy-paste prompt cookbook: per-skill + combos + the sweep-then-fix pattern
   skills/
     dash-diagnose/
       SKILL.md                     <- audits a Dash repo, writes DIAGNOSIS.md + ROADMAP.md into it
