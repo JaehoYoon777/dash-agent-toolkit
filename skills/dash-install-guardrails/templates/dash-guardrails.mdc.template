@@ -1,0 +1,24 @@
+---
+description: Dash guardrails -- canonical verify command + non-negotiables (compact mirror of AGENTS.md)
+alwaysApply: true
+---
+
+<!-- TEMPLATE (dash-install-guardrails section 8): copy to
+     <repo>/.cursor/rules/dash-guardrails.mdc, fill every <...>, delete this
+     comment. Keep SHORT -- long rules get truncated out of context. -->
+
+# Dash guardrails (AGENTS.md wins on conflict)
+
+- App interpreter: `<C:/path/to/envs/app311/python.exe>`. Never the base/default env.
+- THE verify command (identical to the git pre-commit gate):
+  `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1`
+- Reproduce the symptom in the browser BEFORE editing. Check the build stamp
+  first -- a stale server makes every edit invisible.
+- Done = pasted green verify output from THIS session. Unit tests are not
+  proof for front-end behavior bugs.
+- One bug per session; one commit per verified (green) change; no bundled diffs.
+- Tests/verify sandbox state via `<APP_STATE_DIR>`; never write real saved state.
+- Never use `--no-verify` or `SKIP_VERIFY=1`. If verify cannot run, stop and
+  report the broken toolchain -- fixing it IS the task.
+
+Full rules: ./AGENTS.md

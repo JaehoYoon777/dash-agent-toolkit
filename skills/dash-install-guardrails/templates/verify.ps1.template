@@ -1,0 +1,52 @@
+# Template: canonical verify entrypoint -- THE one smoke command for this repo.
+# Copy to <repo>/scripts/verify.ps1, fill CONFIG, then reference this exact
+# invocation everywhere (git pre-commit hook, CLAUDE.md, AGENTS.md,
+# .cursor/rules). Two canonical commands = agents run the weaker one
+# (observed; see dash-install-guardrails section 4).
+#
+#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
+#
+# Exit 0 = green (safe to commit / report done). Exit 1 = red or broken
+# toolchain -- NEVER fail-open: a missing interpreter blocks, not skips.
+# Windows PowerShell 5.1 compatible; ASCII only (PS 5.1 mangles unicode).
+
+# --- CONFIG (adapt per repo) --------------------------------------------------
+$Python     = 'C:\Anaconda3\envs\app311\python.exe'  # app interpreter: the launcher's env, NEVER `which python`
+$SmokeArgs  = @('-m', 'pytest', 'tests/ui', '-m', 'smoke', '-q')  # dash-ui-verify smoke tier
+$Invariants = 'verify.py'  # optional invariants script (section 4); set '' to skip
+# -------------------------------------------------------------------------------
+
+$ErrorActionPreference = 'Stop'
+# scripts/verify.ps1 -> repo root; keeps relative test paths valid from any cwd
+Set-Location (Split-Path -Parent $PSScriptRoot)
+
+if (-not (Test-Path $Python)) {
+    Write-Host "[verify] BLOCKED: app interpreter not found: $Python" -ForegroundColor Red
+    Write-Host "[verify] Fix CONFIG in scripts/verify.ps1. A gate that skips on a broken toolchain is no gate."
+    exit 1
+}
+
+if ($Invariants) {
+    if (-not (Test-Path $Invariants)) {
+        # configured-but-absent = fail loud, not skip: the observed anti-pattern
+        # (except FileNotFoundError: return 0) evaporates exactly when env breaks
+        Write-Host "[verify] BLOCKED: invariants script missing: $Invariants" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "[verify] invariants: $Python $Invariants"
+    & $Python $Invariants
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[verify] RED: invariants failed (exit $LASTEXITCODE)." -ForegroundColor Red
+        exit 1
+    }
+}
+
+Write-Host "[verify] smoke: $Python $($SmokeArgs -join ' ')"
+& $Python @SmokeArgs
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[verify] RED: smoke failed (exit $LASTEXITCODE). Do not commit; do not report done." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "[verify] GREEN." -ForegroundColor Green
+exit 0

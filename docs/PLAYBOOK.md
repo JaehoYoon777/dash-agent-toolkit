@@ -54,7 +54,7 @@ Agents write code for the version your docs claim, not the one you run. After an
 
 ## 6. All agents, one rulebook
 
-Claude Code reads `CLAUDE.md`. Codex and modern Cursor read `AGENTS.md`. Older Cursor reads `.cursor/rules/*.mdc`. If you use more than one agent, maintain ONE source of truth and mirror the invariants + canonical verify commands into the others, each stating "source of truth wins on conflict". An invariant only one agent can see is a rule two agents will break.
+Claude Code reads `CLAUDE.md`. Codex and modern Cursor read `AGENTS.md`. Older Cursor reads `.cursor/rules/*.mdc`. If you use more than one agent, maintain ONE source of truth and mirror the invariants + canonical verify commands into the others, each stating "source of truth wins on conflict". An invariant only one agent can see is a rule two agents will break. `dash-install-guardrails` section 8 ships the mirror templates plus the agent-agnostic git pre-commit gate — the enforcement layer for agents whose hooks never fire.
 
 ## 7. God modules: gate, then split
 

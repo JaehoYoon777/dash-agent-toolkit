@@ -140,6 +140,21 @@ commit first if the tree is dirty. Done when: all 7 deliberate breaks fire
 their gates and the install is one commit.
 ```
 
+### dash-install-guardrails section 8 -- multi-agent gate (repo driven by Cursor / Codex)
+
+```
+Use dash-install-guardrails section 8 only: install the agent-agnostic
+enforcement layer. App interpreter <env-python>. Create scripts/verify.ps1
+from the template (canonical command), .githooks/pre-commit + git config
+core.hooksPath .githooks, and the AGENTS.md + .cursor/rules/dash-guardrails.mdc
+mirrors with every <...> filled. Done when: all 4 section-8.1 deliberate
+breaks fire their gates and the install is one commit.
+```
+
+If the repo's smoke suite cannot even run (plugin clash, wrong env), fix that
+FIRST with dash-ui-verify -- a gate wired to a broken verify blocks every
+commit, including good ones.
+
 ### dash-diagnose (unfamiliar or ailing repo)
 
 ```

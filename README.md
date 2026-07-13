@@ -35,7 +35,8 @@ dash-agent-toolkit/
       reference/                   <- six playbooks: visual, stale, callbacks, perf, routing, persistence
     dash-install-guardrails/
       SKILL.md                     <- wires the enforcement layer (verify checks + hooks) into a target repo
-      templates/                   <- PostToolUse + Stop hook scripts, invariant checks, settings.json fragment
+      templates/                   <- PostToolUse + Stop hook scripts, invariant checks, settings.json fragment,
+                                      git pre-commit gate + verify.ps1 entrypoint + AGENTS.md/.cursor mirrors (Cursor/Codex)
 ```
 
 ## Install (user-level)
@@ -53,7 +54,11 @@ Each `skills/*` directory is mirrored to `~/.claude/skills/<name>` (robocopy `/M
 
 ## Install (per-repo alternative)
 
-Prefer the user-level installer above. To pin skills to one repo instead (versioned with the code), copy any `skills/*` folder into `<target-repo>/.claude/skills/<name>/`. Claude Code picks both locations up automatically. For **Cursor** and **Codex**, the skills' outputs (canonical verify commands, invariants) get mirrored into `AGENTS.md` and `.cursor/rules/` — the `dash-diagnose` roadmap includes a step that creates those mirrors.
+Prefer the user-level installer above. To pin skills to one repo instead (versioned with the code), copy any `skills/*` folder into `<target-repo>/.claude/skills/<name>/`. Claude Code picks both locations up automatically.
+
+## Using with Cursor / Codex (no Claude Code hooks)
+
+Cursor and Codex never fire the toolkit's PostToolUse/Stop hooks — in those agents the enforcement layer must live in layers every agent hits. `dash-install-guardrails` **section 8** ships it: a **git pre-commit gate** (`.githooks/pre-commit` runs the one canonical `scripts/verify.ps1`; red verify blocks the commit, broken toolchain blocks loudly — never fail-open) plus **rulebook mirrors** (`AGENTS.md` for Codex + modern Cursor, `.cursor/rules/dash-guardrails.mdc` with `alwaysApply: true` for older Cursor), all generated from `skills/dash-install-guardrails/templates/`. Field origin: a Cursor-auto session claimed "smoke test passed" three turns running while the smoke stack couldn't execute at all (wrong interpreter + pytest plugin clash) — a gate the agent cannot skip is the fix, not a better prompt. The `dash-diagnose` roadmap (item 0.3) points at the same section.
 
 ## Order of operations on a new (or ailing) Dash repo
 

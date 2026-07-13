@@ -1,0 +1,50 @@
+#!/bin/sh
+# Template: git pre-commit gate -- the agent-agnostic enforcement layer.
+# Copy to <repo>/.githooks/pre-commit (no extension), then activate:
+#   git config core.hooksPath .githooks
+#   git add .githooks/pre-commit && git update-index --chmod=+x .githooks/pre-commit
+#
+# Why git and not editor hooks: Claude Code PostToolUse/Stop gates never fire
+# under Cursor/Codex (observed: three turns of "smoke test passed" while the
+# smoke stack could not even run). Every agent commits through git; this hook
+# runs the ONE canonical verify (scripts/verify.ps1) and blocks red commits.
+#
+# Fail-closed: missing verify entrypoint or interpreter BLOCKS the commit
+# loudly. Never exit 0 on a broken toolchain.
+#
+# Human escapes (agents must never use these -- see AGENTS.md):
+#   SKIP_VERIFY=1 git commit ...   or   git commit --no-verify
+# Both leave no marker in history; owner audits any commit that landed red.
+#
+# git-for-Windows runs hooks via its bundled sh.exe, so POSIX sh works on
+# Windows. Non-Windows repos: swap the powershell line for pwsh or a
+# scripts/verify.sh that runs the identical checks.
+
+# --- CONFIG (adapt per repo) -------------------------------------------------
+VERIFY_PS1="scripts/verify.ps1"   # the canonical entrypoint, repo-relative
+# ------------------------------------------------------------------------------
+
+if [ "$SKIP_VERIFY" = "1" ]; then
+    echo "[pre-commit] SKIP_VERIFY=1 -- gate bypassed (human escape; audit surface)"
+    exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+if [ ! -f "$VERIFY_PS1" ]; then
+    echo "[pre-commit] BLOCKED: canonical verify missing: $VERIFY_PS1" >&2
+    echo "[pre-commit] A gate that skips on a broken toolchain is no gate. Restore it or fix CONFIG in .githooks/pre-commit." >&2
+    exit 1
+fi
+
+echo "[pre-commit] running: powershell -NoProfile -ExecutionPolicy Bypass -File $VERIFY_PS1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$VERIFY_PS1"
+rc=$?
+
+if [ $rc -ne 0 ]; then
+    echo "[pre-commit] BLOCKED: verify red (exit $rc). Fix before committing." >&2
+    exit $rc
+fi
+
+echo "[pre-commit] verify green -- commit allowed."
+exit 0

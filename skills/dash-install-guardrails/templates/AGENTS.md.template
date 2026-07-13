@@ -1,0 +1,48 @@
+<!-- TEMPLATE (dash-install-guardrails section 8): copy to <repo>/AGENTS.md,
+     fill every <...> placeholder, delete this comment. Codex and modern
+     Cursor read this file natively; .cursor/rules/dash-guardrails.mdc is its
+     compact mirror for older Cursor. Keep in sync with CLAUDE.md -- for
+     non-Claude agents THIS file wins on conflict. -->
+
+# AGENTS.md -- <APP NAME> rulebook (Cursor / Codex / any coding agent)
+
+## Tech stack -- installed reality (update in the SAME commit as any env change)
+
+| Fact | Value |
+|---|---|
+| App interpreter | `<C:/path/to/envs/app311/python.exe>` -- the launcher's env, NEVER the base/default env or `which python` |
+| Dash | `<pin>` (must equal pyproject `==` pin; the verify version gate checks) |
+| Boot | `<python run.py>` -> `<http://127.0.0.1:8051>` |
+| State dir | `<path>` -- env-overridable via `<APP_STATE_DIR>` |
+| Test env note | `<e.g. pytest + playwright + pytest-playwright pinned in the app env; if pytest errors on boot, fixing the toolchain IS the task -- do not fall back to weaker checks>` |
+
+## The one verify command
+
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
+
+Exit 0 = green, exit 1 = red. This EXACT command is what the git pre-commit
+hook runs. There is no weaker "quick check": if any doc shows a different
+smoke command, this one wins -- report the drift instead of running the other.
+
+## Non-negotiables
+
+1. **Ground truth before editing.** Reproduce the symptom in the browser
+   (screenshot, console error, or network evidence) BEFORE changing code.
+   Check the build stamp first: a stale server makes every edit invisible.
+2. **Done = pasted green verify output.** Never claim "smoke test passed"
+   without running the command above in THIS session and pasting its tail.
+   Unit tests are not proof for front-end behavior bugs.
+3. **One bug per session; one commit per verified change.** No bundled diffs
+   (fix + docs + refactor in one commit = un-revertable blast radius).
+   Commit only after verify is green -- the hook enforces this.
+4. **State sandbox.** Tests and verify must point `<APP_STATE_DIR>` at a temp
+   copy. Nothing may write the real state dir.
+5. **Version truth.** Write code for the INSTALLED versions in the table
+   above, not what a stale doc claims. If the table disagrees with
+   `importlib.metadata`, fixing the table is part of the change.
+
+## Escapes -- humans only
+
+`git commit --no-verify` and `SKIP_VERIFY=1` bypass the pre-commit gate.
+Agents must never use them. If verify cannot run (broken toolchain), STOP and
+report the breakage; do not route around the gate.

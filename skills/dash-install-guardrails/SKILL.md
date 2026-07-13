@@ -1,6 +1,6 @@
 ---
 name: dash-install-guardrails
-description: One-command wiring of the enforcement layer into a Dash repo -- installs PostToolUse + Stop hook gates (covering Bash-mediated writes and JS/CSS assets, never fail-open), adds executable invariants to the verify script (version gate, store-writer manifest vs callback_map, layout walk, payload budget), sandboxes verify away from real user state, and adds a build stamp. Use when asked to "install guardrails", "set up hooks", "enforce verification", "wire up verify", "stop the agent skipping smoke tests", "make verification mandatory", or after dash-diagnose flags a verification gap (its ROADMAP Phase 3 lands here).
+description: One-command wiring of the enforcement layer into a Dash repo -- installs PostToolUse + Stop hook gates (covering Bash-mediated writes and JS/CSS assets, never fail-open), adds executable invariants to the verify script (version gate, store-writer manifest vs callback_map, layout walk, payload budget), sandboxes verify away from real user state, and adds a build stamp. Section 8 covers repos driven by Cursor/Codex where Claude Code hooks never fire -- installs the agent-agnostic git pre-commit gate plus AGENTS.md/.cursor-rules mirrors. Use when asked to "install guardrails", "set up hooks", "enforce verification", "wire up verify", "stop the agent skipping smoke tests", "make verification mandatory", "make Cursor run the smoke test", "enforce verification outside Claude Code", or after dash-diagnose flags a verification gap (its ROADMAP Phase 3 lands here).
 ---
 
 # dash-install-guardrails
@@ -94,3 +94,35 @@ The install is unverified until each gate has been seen firing. Break deliberate
 All seven fired and reverted -> commit the install as one change. If the repo has no browser harness yet, hand off to `dash-ui-verify` Mode B next: these gates enforce whatever tier exists, and an import-layer verify alone still misses the browser bug class entirely.
 
 Ongoing discipline the gates should keep enforcing: one commit per verified change. Optional but recommended -- extend the Stop gate with a git-status check that warns when the turn ends green but the tree carries uncommitted changes beyond the current fix's files; an unrevertable tree is how repos drift back to whack-a-mole (PLAYBOOK section 3).
+
+## 8 -- Multi-agent mirrors + git gate (Cursor / Codex: enforcement without Claude Code hooks)
+
+Sections 2-3 fire only inside Claude Code. A repo driven by Cursor or Codex has NO PostToolUse/Stop layer -- prose rules are all it sees, and prose is exactly what drifts. Observed (Cursor auto, production quant portal): three consecutive turns each claiming "smoke test passed" while the smoke stack could not even run -- wrong interpreter (base Anaconda instead of the app env) plus a pytest-playwright plugin clash meant the tests never executed; zero gates fired, three regressions shipped, the app crashed at boot on turn 3. The agent-agnostic gate is git itself: every agent's work funnels through `git commit`, so a pre-commit hook running the canonical verify blocks red work regardless of IDE. Install:
+
+1. **Canonical entrypoint** -- copy `templates/verify.ps1.template` to `scripts/verify.ps1`, fill CONFIG (app interpreter from the section-1 table, smoke args, optional invariants script from section 4). This becomes THE one verify command; the hook and every agent doc reference it and nothing else.
+2. **Git gate** -- copy `templates/pre_commit.template` to `.githooks/pre-commit` (no extension), then:
+   ```
+   git config core.hooksPath .githooks
+   git add .githooks/pre-commit
+   git update-index --chmod=+x .githooks/pre-commit
+   ```
+   `.githooks/` is versioned so the gate survives clones; `core.hooksPath` is per-machine -- put the config line in the repo's setup doc. Fail-closed like the Claude hooks: missing `scripts/verify.ps1` or a missing interpreter BLOCKS the commit loudly, never skips.
+3. **Rulebook mirrors** -- copy `templates/AGENTS.md.template` to repo-root `AGENTS.md` (Codex + modern Cursor read it natively) and `templates/dash-guardrails.mdc.template` to `.cursor/rules/dash-guardrails.mdc` (frontmatter `alwaysApply: true`; how older Cursor sees rules). Fill every `<...>`: interpreter path, pins, boot command, state-dir env var. Both carry "AGENTS.md wins on conflict" (PLAYBOOK section 6).
+4. **One-command audit** -- grep CLAUDE.md, AGENTS.md, and the `.mdc` for the verify invocation: all must carry the IDENTICAL command from step 1. Two canonical commands = agents run the weaker one (section 4, observed).
+
+### 8.1 -- Done-when: break the git gate once per failure mode
+
+| Deliberate break | Gate that must fire |
+|---|---|
+| Force smoke red (temporary `assert False` in a smoke test), `git commit` | commit BLOCKED, pytest failure tail printed |
+| Point verify.ps1 `$Python` at a nonexistent path, `git commit` | commit BLOCKED loudly -- silence here means fail-open, install failed |
+| Rename `scripts/verify.ps1` away, `git commit` | commit BLOCKED (missing entrypoint is not a pass) |
+| `git commit --no-verify` while red | commit LANDS -- expected: the human escape. It leaves no marker, so the owner treats any red-landed commit as an audit item |
+
+All four fired -> revert the breaks, commit the install as one change.
+
+### 8.2 -- Limits (what this layer cannot do)
+
+- Fires only on commit; there is no per-edit feedback (that is the Claude-hooks layer). On repos where both agents run, keep both: hooks give in-session feedback, the git gate catches whatever slips past.
+- An agent that never commits ships nothing through the gate -- the mirrors' "one commit per verified change" rule funnels work into it. The owner-side audit stays regardless: agent says done -> owner runs `scripts/verify.ps1` (seconds) before believing it.
+- `--no-verify` / `SKIP_VERIFY=1` are deliberate human escapes for mid-incident commits. The mirrors forbid agents from using them; their appearance in an agent transcript is itself a finding.
