@@ -52,6 +52,8 @@ cd dash-agent-toolkit
 
 Each `skills/*` directory is mirrored to `~/.claude/skills/<name>` (robocopy `/MIR` on Windows, `rsync -a --delete` elsewhere), so renames and deletions propagate and the installed set always matches the repo exactly. Idempotent: re-run after every `git pull` to pick up updates. Claude Code auto-discovers user-level skills; no per-repo setup needed.
 
+**Cursor 2.4+ (Jan 2026) discovers the same install:** Cursor supports the Agent Skills standard natively and reads `~/.claude/skills/` for compatibility — so `install.ps1` makes every skill available in Cursor too (restart Cursor after installing). Skills in Cursor are advisory context, not enforcement: Cursor has no PostToolUse/Stop hooks, so pair with the section-8 git gate below.
+
 ## Install (per-repo alternative)
 
 Prefer the user-level installer above. To pin skills to one repo instead (versioned with the code), copy any `skills/*` folder into `<target-repo>/.claude/skills/<name>/`. Claude Code picks both locations up automatically.
